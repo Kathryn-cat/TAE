@@ -186,6 +186,8 @@ def train(args):
                 if (epoch + 1) % args.eval_interval == 0:
                     greedy_hype = generate_hypothesis(args, valid_loader, model_to_evaluate, search='greedy')
                     metrics, sampled_texts = compute_metric(greedy_hype, args.dataset_name, split='dev', tokenizer=model.tokenizer, args=args, return_data=True)
+                    val_intents = [model.tokenizer.decode(item['intent']['input_ids']) for item in valid_dataset[:100]]
+                    sampled_texts = [[y] + x for x, y in zip(sampled_texts, val_intents)]
                     import pdb; pdb.set_trace()
                     writer.add_scalar('Loss/dev', validation_loss, epoch)
                     print('exact match accuracy', metrics['exact_match'])
@@ -223,7 +225,7 @@ def train(args):
                         'train_loss': averaged_loss,
                         'val_loss': validation_loss,
                         'criteria': criteria,
-                        'text': wandb.Table(data=sampled_texts, columns=['GT', 'Pred'])
+                        'text': wandb.Table(data=sampled_texts, columns=['Intent', 'GT', 'Pred'])
                     })
                     wandb.log(log_dict, step=epoch)
 
