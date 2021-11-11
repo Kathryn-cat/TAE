@@ -1,0 +1,7 @@
+data/
+logs*/
+__pycache__/
+**/__pychache__/
+wandb/
+pretrained_weights/
+cuda*.run
