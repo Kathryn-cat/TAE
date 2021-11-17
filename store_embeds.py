@@ -37,13 +37,27 @@ model.device = device
 model.load_state_dict(torch.load(args.pretrained_path))
 model.eval()
 
-train_dataset = Conala('conala', 'train', model.tokenizer, args, monolingual=False)
-train_loader = DataLoader(train_dataset, batch_size=args.test_batch_size, shuffle=False,
-                            num_workers=0, pin_memory=False, collate_fn=preprocess_batch)
+data_types = ['train', 'mined', 'code_only']
+data_types = data_types[:data_types.index(args.data_type)+1]
+
+datasets = []
+if 'train' in datasets:
+    datasets.append(Conala('conala', 'train', model.tokenizer, args, monolingual=False))
+if 'mined' in datasets:
+    datasets.append(Conala('conala', 'train', model.tokenizer, args, monolingual=True))
+if 'code_only' in datasets:
+    raise NotImplementedError # need to get code-only data first
+
+full_dataset = datasets[0]
+for i in range(1, len(datasets)):
+    full_dataset.data.extend(datasets[i].data)
+
+loader = DataLoader(full_dataset, batch_size=args.test_batch_size, shuffle=False,
+                    num_workers=0, pin_memory=False, collate_fn=preprocess_batch)
 
 dstore_size = 0
-for i in range(len(train_dataset)):
-    example = train_dataset[i]
+for i in range(len(full_dataset)):
+    example = full_dataset[i]
     dstore_size += (len(example['snippet']['input_ids']) - 1)
 print('Total # of target tokens:', dstore_size)
 
@@ -57,7 +71,7 @@ dstore_vals = np.memmap(f'datastore{args.data_type}_values.npy', dtype=np.int, m
 
 with torch.no_grad():
     offset = 0
-    for i, data in enumerate(tqdm(train_loader)):
+    for i, data in enumerate(tqdm(loader)):
         lengths = data['target']['attention_mask'].sum(dim=1)
         *_, prediction, generation_prediction = model(data)
         input_ids = data['target']['input_ids']
