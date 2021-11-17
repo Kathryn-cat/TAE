@@ -256,9 +256,7 @@ def train(args):
 
     writer.close()
 
-
-
-if __name__ == '__main__':
+def make_parser():
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--prefix', type=str, default='default')
     parser.add_argument('--epochs', type=int, default=200)
@@ -331,12 +329,10 @@ if __name__ == '__main__':
     parser.add_argument('--lr_decay', type=float, default=1)
     parser.add_argument('--n', type=int, default=256)
     parser.add_argument('--warmup_steps', type=int, default=0)
+    return parser
 
-    import resource
 
-    rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
-    resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
-
+def get_args(parser):
     args = parser.parse_args()
     if args.dataset_name == 'django' or args.dataset_name == 'conala':
         args.python = True
@@ -368,6 +364,19 @@ if __name__ == '__main__':
 
     if args.generate_back_translation:
         args.translate_backward = True
+    
+    return args
+
+
+if __name__ == '__main__':
+    parser = make_parser()
+
+    import resource
+
+    rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
+
+    args = get_args(parser)
 
     wandb.init(name="conala-reproduce",
                config=vars(args))

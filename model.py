@@ -103,7 +103,7 @@ class Model(nn.Module):
             logits.scatter_add_(index=index.unsqueeze(1).expand(-1, logits.shape[1], -1),
                                 src=copy_attention, dim=2)
 
-        return logits, target, choices, label, prediction
+        return logits, target, choices, label, prediction, generation_prediction
 
 
 class MyEmbedding(nn.Module):
