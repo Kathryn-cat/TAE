@@ -4,12 +4,13 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import numpy as np
 import torch.nn as nn
 from transformers import AutoTokenizer, AutoModel, BertModel
 from torch.nn import LayerNorm
+# from knnlm import KNN_Dstore
 from nn import MyTransformerDecoder, MyTransformerDecoderLayer, generate_square_subsequent_mask
 import torch
-
 
 class Model(nn.Module):
     def __init__(self, pretrained_weights, args):
@@ -104,6 +105,31 @@ class Model(nn.Module):
                                 src=copy_attention, dim=2)
 
         return logits, target, choices, label, prediction, generation_prediction
+
+
+class KNNModel(Model):
+    def __init__(self, dstore, k: int, lmbda: float, *args, **kwargs):
+        super(KNNModel, self).__init__(*args, **kwargs)
+        self.k = k
+        self.dstore = dstore
+        self.lmbda = lmbda
+
+    def get_knn_scores_per_step(self, x):
+        vocab_size = self.encoder.config.vocab_size
+        pad_id = self.tokenizer.pad_token_id
+        return self.dstore.get_knn_scores_per_step(
+            x, vocab_size, pad_id
+        )
+
+    def interpolate(self, lprobs, knn_scores):
+        # taken from knnmt/fairseq/sequence_generator.py
+        lprobs = torch.stack([lprobs, knn_scores.to(lprobs)], dim=0)
+        coeffs = torch.ones_like(lprobs)
+        coeffs[0] = np.log(1 - self.lmbda)
+        coeffs[1] = np.log(self.lmbda)
+        lprobs = torch.logsumexp(lprobs + coeffs, dim=0)
+        # lprobs is log of interpolated probability distribution
+        return lprobs
 
 
 class MyEmbedding(nn.Module):

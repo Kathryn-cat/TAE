@@ -20,7 +20,8 @@ def greedy_search(args, model, data, prediction_length):
     for i in range(1, prediction_length):
         target_input = ({k: v[:, :i + 1] for k, v in generated_seq.items()})
         with torch.cuda.amp.autocast():
-            _, logits, choices = compute_loss(args, data, model, target_input=target_input, encoder_output_saved=encoder_outputs)
+            _, logits, choices = compute_loss(args, data, model, 
+                target_input=target_input, encoder_output_saved=encoder_outputs, test=True)
         logits = logits[:, i-1]
         selected_indices = torch.argmax(logits, dim=-1, keepdim=True)
         if args.pointer_network:
@@ -65,7 +66,8 @@ def beam_search(args, model, data, prediction_length=140):
     for i in range(1, prediction_length):
         target_input = ({k:v[:, :i+1]  for k, v in generated_seq.items()})
         with torch.cuda.amp.autocast():
-            _, logits, choices = compute_loss(args, data, model, target_input=target_input, encoder_output_saved=encoder_outputs)
+            _, logits, choices = compute_loss(args, data, model, 
+                target_input=target_input, encoder_output_saved=encoder_outputs, test=True)
         if args.pointer_network:
             choices['input_ids'] = choices['input_ids'].to('cpu')
         logits = logits[:, i - 1]

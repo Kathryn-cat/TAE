@@ -206,13 +206,20 @@ def LabelSmoothingCrossEntropy(preds, target, args, choices_attention=None):
         return nll
 
 
-def compute_loss(args, data, model, target_input=None, no_context_update=False, encoder_output_saved=None):
+def compute_loss(args, data, model, target_input=None, no_context_update=False, encoder_output_saved=None, test=False):
     target_input_model = None
     if target_input is not None:
         target_input_model = target_input
-    logits, target, choices, labels, hidden = model(data, target_input=target_input_model,
-                                                     no_context_update=no_context_update,
-                                                    encoder_output_saved=encoder_output_saved)
+    logits, target, choices, labels, hidden, generation_prediction = (
+        model(data, target_input=target_input_model, 
+              no_context_update=no_context_update,
+              encoder_output_saved=encoder_output_saved)
+    )
+    
+    if test:
+        knn_scores = model.get_knn_scores_per_step(generation_prediction)
+        logits = model.interpolate(logits, knn_scores)
+
     if args.pointer_network:
         labels = labels[:, 1:target['input_ids'].shape[1]].to(args.device)
     else:
