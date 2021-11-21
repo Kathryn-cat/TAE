@@ -5,6 +5,7 @@ Run with:
 python3 store_embeds.py \
     --dataset_name conala \
     --pretrained_path {path/to/pretrained/model}
+    --data_type ['train', 'mined']
 
 Afterward, run build_dstore.py with appropriate args to generate datastore.
 '''
@@ -67,13 +68,14 @@ with torch.no_grad():
         dstore_size += lengths.sum()
     
 print('Total # of target tokens:', dstore_size)
+print('Size of each key:', model.encoder.config.hidden_size)
 
 if not os.path.isdir('datastore'):
     os.mkdir('datastore')
 
-dstore_keys = np.memmap(f'datastore_{args.data_type}_keys.npy', dtype=np.float16, mode='w+',
+dstore_keys = np.memmap(f'datastore/{args.data_type}_keys.npy', dtype=np.float16, mode='w+',
                         shape=(dstore_size, model.encoder.config.hidden_size))
-dstore_vals = np.memmap(f'datastore{args.data_type}_values.npy', dtype=np.int, mode='w+',
+dstore_vals = np.memmap(f'datastore/{args.data_type}_values.npy', dtype=np.int, mode='w+',
                         shape=(dstore_size, 1))
 
 with torch.no_grad():
@@ -88,8 +90,7 @@ with torch.no_grad():
                 pred[:actual_length].cpu().numpy().astype(np.float16)
             dstore_vals[offset:offset+actual_length] = \
                 ids[1:1+actual_length].view(-1, 1).cpu().numpy().astype(np.int)
-            offset += length
-        pdb.set_trace()
+            offset += actual_length
 
 dstore_keys.flush()
 dstore_vals.flush()
