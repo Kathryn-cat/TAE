@@ -3,7 +3,6 @@ Stores each context (i.e. intent/previous tokens) as a fixed-size embedding
 
 Run with:
 python3 store_embeds.py \
-    --dstore_mmap datastore/train_store \
     --dataset_name conala \
     --pretrained_path {path/to/pretrained/model}
 
@@ -29,23 +28,25 @@ parser.add_argument('--data_type', type=str,
     help='Type of data used in the store (each is a superset of the previous)')
 args = get_args(parser)
 
+print(args)
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 model = Model('bert-base-uncased', args)
 model.to(device)
 model.device = device
-model.load_state_dict(torch.load(args.pretrained_path))
+# model.load_state_dict(torch.load(args.pretrained_path))
 model.eval()
 
 data_types = ['train', 'mined', 'code_only']
 data_types = data_types[:data_types.index(args.data_type)+1]
 
 datasets = []
-if 'train' in datasets:
+if 'train' in data_types:
     datasets.append(Conala('conala', 'train', model.tokenizer, args, monolingual=False))
-if 'mined' in datasets:
+if 'mined' in data_types:
     datasets.append(Conala('conala', 'train', model.tokenizer, args, monolingual=True))
-if 'code_only' in datasets:
+if 'code_only' in data_types:
     raise NotImplementedError # need to get code-only data first
 
 full_dataset = datasets[0]
@@ -56,9 +57,15 @@ loader = DataLoader(full_dataset, batch_size=args.test_batch_size, shuffle=False
                     num_workers=0, pin_memory=False, collate_fn=preprocess_batch)
 
 dstore_size = 0
-for i in range(len(full_dataset)):
-    example = full_dataset[i]
-    dstore_size += (len(example['snippet']['input_ids']) - 1)
+# for i in range(len(full_dataset)):
+#     example = full_dataset[i]
+#     dstore_size += (len(example['snippet']['input_ids']) - 1)
+
+with torch.no_grad():
+    for data in tqdm(loader):
+        lengths = data['target']['attention_mask'].sum(dim=1) - 1
+        dstore_size += lengths.sum()
+    
 print('Total # of target tokens:', dstore_size)
 
 if not os.path.isdir('datastore'):
