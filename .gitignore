@@ -5,3 +5,5 @@ __pycache__/
 wandb/
 pretrained_weights/
 cuda*.run
+python3
+datastore/
