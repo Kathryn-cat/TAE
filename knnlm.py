@@ -3,6 +3,7 @@ Taken from https://github.com/urvashik/knnmt
 '''
 
 import torch
+import torch.nn.functional as F
 import faiss
 import math
 import numpy as np
@@ -28,6 +29,7 @@ class KNN_Dstore(object):
         self.dstore_fp16 = args.dstore_fp16
         self.use_faiss_only = args.use_faiss_only
         self.index = self.setup_faiss(args)
+        self.lmbda = args.lmbda
 
 
     def setup_faiss(self, args):
@@ -125,7 +127,7 @@ class KNN_Dstore(object):
         # (T_reducedxB)xK
         dists = torch.from_numpy(dists).cuda()
         start = time.time()
-        dists = self.dist_func(dists, knns, queries[tgt != pad_idx, :], function=self.sim_func)
+        # dists = self.dist_func(dists, knns, queries[tgt != pad_idx, :], function=self.sim_func)
         probs = log_softmax(dists, dim=-1)
 
         index_mask = torch.eq(torch.from_numpy(self.vals[knns]).long().cuda().squeeze(-1), tgt[tgt != pad_idx].unsqueeze(-1)).float()
@@ -151,7 +153,7 @@ class KNN_Dstore(object):
         #print(dists)
         # TODO(urvashik): update to use full precision keys
         #dists = -1 * dists
-        dists = self.dist_func(dists, knns, queries, function=self.sim_func)
+        # dists = self.dist_func(dists, knns, queries, function=self.sim_func)
         #print(dists)
         dists.div_(knn_temp)
         probs = log_softmax(dists, dim=-1).type(dtype=use_dtype)
@@ -184,6 +186,7 @@ class KNN_Dstore(object):
         knn_vals_by_index = knn_vals_by_index.max(dim=1)[0]
         full_knn_scores = torch.ones([queries.shape[0], vocab_size], dtype=use_dtype).cuda()
         full_knn_scores[:] = -10000 #-math.inf
+        import pdb;pdb.set_trace()
         full_knn_scores.scatter_(dim=1, index=knn_vals_by_index, src=knn_scores_by_index)
         ## TRYING SOMETHING OUT
 

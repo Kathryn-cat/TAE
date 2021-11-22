@@ -121,10 +121,11 @@ class KNNModel(Model):
 
     def interpolate(self, lprobs, knn_scores):
         # taken from knnmt/fairseq/sequence_generator.py
-        lprobs = torch.stack([lprobs, knn_scores.to(lprobs)], dim=0)
+        lprobs = torch.stack([lprobs.squeeze(dim=1), 
+                              knn_scores.to(lprobs.squeeze(dim=1))], dim=0)
         coeffs = torch.ones_like(lprobs)
-        coeffs[0] = np.log(1 - self.lmbda)
-        coeffs[1] = np.log(self.lmbda)
+        coeffs[0] = np.log(1 - self.dstore.lmbda)
+        coeffs[1] = np.log(self.dstore.lmbda)
         lprobs = torch.logsumexp(lprobs + coeffs, dim=0)
         # lprobs is log of interpolated probability distribution
         return lprobs

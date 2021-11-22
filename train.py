@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from TAE.knnlm import KNN_Dstore
+from knnlm import KNN_Dstore
 import wandb
 from tqdm import tqdm
 from torch.utils.data import DataLoader
@@ -21,7 +21,7 @@ from evaluation.compute_eval_metrics import compute_metric
 from utils import compute_loss, get_next_batch
 import os
 from evaluation.evaluation import generate_hypothesis
-from utils import generate_model_name
+from utils import generate_model_name, make_parser, get_args
 from torch.nn.utils.rnn import pad_sequence
 from dataset_preprocessing.django import Django
 from dataset_preprocessing.conala import Conala
@@ -105,7 +105,7 @@ def train(args):
     print("Effective batch size", args.batch_size)
     model_name = generate_model_name(args)
     print("model name", model_name)
-    writer = SummaryWriter(log_dir=args.save_dir+'/logs/{}/'.format(model_name) + model_name[:-4])
+    writer = SummaryWriter(log_dir=args.save_dir+'/logs/conalaexp/')
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
                               num_workers=args.num_workers, pin_memory=True, collate_fn=preprocess_batch)
@@ -234,7 +234,8 @@ def train(args):
         if args.knn:
             dstore = KNN_Dstore(args)
             model = KNNModel(dstore, pretrained_weights, args)
-        model.load_state_dict(torch.load(os.path.join(args.save_dir, model_name)))
+            model.to(args.device)
+        model.load_state_dict(torch.load(os.path.join(args.save_dir, 'conala_weights.pth')))
         model.eval()
         valid_loader = DataLoader(valid_dataset, batch_size=args.test_batch_size, shuffle=False,
                                   num_workers=args.num_workers, pin_memory=True, collate_fn=preprocess_batch)
@@ -260,6 +261,7 @@ def train(args):
 
     writer.close()
 
+'''
 def make_parser():
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--prefix', type=str, default='default')
@@ -370,10 +372,13 @@ def get_args(parser):
         args.translate_backward = True
     
     return args
+'''
 
 
 if __name__ == '__main__':
     parser = make_parser()
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
     import resource
 

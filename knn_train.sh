@@ -1,6 +1,6 @@
 # Uses hyperparams from KNN-MT for now, should probably tune for code gen task
 
-python3 train.py --dataset_name conala \
+CUDA_LAUNCH_BLOCKING=1 python3 train.py --dataset_name conala \
     --save_dir pretrained_weights/conala \
     --copy_bt \
     --no_encoder_update \
@@ -10,10 +10,10 @@ python3 train.py --dataset_name conala \
     --seed 4 \
     --knn \
     --dstore-fp16 \
-    --k 64 \ # TODO: tune this
-    --probe 8 \ # TODO: tune this
-    --lmbda 0.8 \ # TODO: tune this
-    --dstore-size {size} \ # TODO: fill in this with size outputted by store_embeds.py
-    --dstore_filename {datastore/train} \ # train datastore for now, should try mined as well
-    --indexfile {wherever faiss index was saved} \ # TODO: fill in with location of faiss index
+    --k 64 \
+    --probe 8 \
+    --lmbda 0.8 \
+    --dstore-size 50044 \
+    --dstore-filename datastore/train \
+    --indexfile datastore/train_knn.index \
     --no-load-keys

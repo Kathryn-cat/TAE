@@ -91,10 +91,10 @@ def make_parser():
     parser.add_argument('--warmup_steps', type=int, default=0)
 
     # Added in case we want to run everything with 16-bit precision to speed things up
-    parser.add_argument('--fp16', type=bool, default=False, action='store_true', help='use FP16')
+    parser.add_argument('--fp16', default=False, action='store_true', help='use FP16')
 
     # BELOW: Added arguments for knn experiments
-    parser.add_argument('--knn', type=bool, default=False, action='store_true', help='use knnlm')
+    parser.add_argument('--knn', default=False, action='store_true', help='use knnlm')
     parser.add_argument('--dstore-fp16', default=False, action='store_true',
                         help='if true, datastore items are saved in fp16 and int16')
 
@@ -107,6 +107,8 @@ def make_parser():
                         help='controls interpolation with knn, 0.0 = no knn')
     parser.add_argument('--knn-sim-func', default=None, type=str, # don't actually need this one
                         help='similarity function to use for knns')
+    parser.add_argument('--use-faiss-only', action='store_true', default=True,
+                        help='do not look up the keys/values from a separate array')
     parser.add_argument('--faiss_metric_type', type=str, default='l2',
                         help='distance metric for faiss')
 
@@ -121,6 +123,8 @@ def make_parser():
                         help='dimension of keys in knn datastore')
     parser.add_argument('--no-load-keys', default=False, action='store_true',
                         help='do not load keys')
+    parser.add_argument('--knn-q2gpu', action='store_true', default=False,
+                        help='move the quantizer from faiss to gpu')
     
     # probably shouldn't use this flag (except for small datastores)
     parser.add_argument('--move-dstore-to-mem', default=False, action='store_true', 
