@@ -71,9 +71,9 @@ print('Total # of target tokens:', dstore_size)
 if not os.path.isdir('datastore'):
     os.mkdir('datastore')
 
-dstore_keys = np.memmap(f'datastore_{args.data_type}_keys.npy', dtype=np.float16, mode='w+',
+dstore_keys = np.memmap(f'datastore/{args.data_type}_keys.npy', dtype=np.float16, mode='w+',
                         shape=(dstore_size, model.encoder.config.hidden_size))
-dstore_vals = np.memmap(f'datastore{args.data_type}_values.npy', dtype=np.int, mode='w+',
+dstore_vals = np.memmap(f'datastore/{args.data_type}_values.npy', dtype=np.int, mode='w+',
                         shape=(dstore_size, 1))
 
 with torch.no_grad():
@@ -86,9 +86,10 @@ with torch.no_grad():
             actual_length = length-1
             dstore_keys[offset:offset+actual_length] = \
                 pred[:actual_length].cpu().numpy().astype(np.float16)
+            # TODO: maybe values should be stored as int16?
             dstore_vals[offset:offset+actual_length] = \
-                ids[1:1+actual_length].view(-1, 1).cpu().numpy().astype(np.int)
-            offset += length
+                ids[1:1+actual_length].view(-1, 1).cpu().numpy().astype(np.int) 
+            offset += actual_length
         pdb.set_trace()
 
 dstore_keys.flush()

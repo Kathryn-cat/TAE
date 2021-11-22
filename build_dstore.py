@@ -8,7 +8,7 @@ import numpy as np
 import faiss
 import time
 
-
+# TODO: decide args
 parser = argparse.ArgumentParser()
 parser.add_argument('--dstore_mmap', type=str, help='memmap where keys and vals are stored')
 parser.add_argument('--dstore_size', type=int, help='number of items saved in the datastore memmap')

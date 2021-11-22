@@ -89,6 +89,43 @@ def make_parser():
     parser.add_argument('--lr_decay', type=float, default=1)
     parser.add_argument('--n', type=int, default=256)
     parser.add_argument('--warmup_steps', type=int, default=0)
+
+    # Added in case we want to run everything with 16-bit precision to speed things up
+    parser.add_argument('--fp16', type=bool, default=False, action='store_true', help='use FP16')
+
+    # BELOW: Added arguments for knn experiments
+    parser.add_argument('--knn', type=bool, default=False, action='store_true', help='use knnlm')
+    parser.add_argument('--dstore-fp16', default=False, action='store_true',
+                        help='if true, datastore items are saved in fp16 and int16')
+
+    # KNN Hyperparameters
+    parser.add_argument('--k', default=1024, type=int, 
+                        help='number of nearest neighbors to retrieve')
+    parser.add_argument('--probe', default=8, type=int,
+                            help='for FAISS, the number of lists to query')
+    parser.add_argument('--lmbda', default=0.0, type=float,
+                        help='controls interpolation with knn, 0.0 = no knn')
+    parser.add_argument('--knn-sim-func', default=None, type=str, # don't actually need this one
+                        help='similarity function to use for knns')
+    parser.add_argument('--faiss_metric_type', type=str, default='l2',
+                        help='distance metric for faiss')
+
+    # Datastore related stuff
+    parser.add_argument('--dstore-size', type=int,
+                        help='number of items in the knn datastore')
+    parser.add_argument('--dstore-filename', type=str, default=None,
+                        help='File where the knn datastore is saved')
+    parser.add_argument('--indexfile', type=str, default=None,
+                        help='File containing the index built using faiss for knn')
+    parser.add_argument('--knn_embed_dim', type=int, default=768,
+                        help='dimension of keys in knn datastore')
+    parser.add_argument('--no-load-keys', default=False, action='store_true',
+                        help='do not load keys')
+    
+    # probably shouldn't use this flag (except for small datastores)
+    parser.add_argument('--move-dstore-to-mem', default=False, action='store_true', 
+                        help='move the keys and values for knn to memory')
+
     return parser
 
 
@@ -215,8 +252,8 @@ def compute_loss(args, data, model, target_input=None, no_context_update=False, 
               no_context_update=no_context_update,
               encoder_output_saved=encoder_output_saved)
     )
-    
-    if test:
+
+    if test and args.knn:
         knn_scores = model.get_knn_scores_per_step(generation_prediction)
         logits = model.interpolate(logits, knn_scores)
 

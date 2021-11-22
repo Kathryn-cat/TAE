@@ -108,11 +108,9 @@ class Model(nn.Module):
 
 
 class KNNModel(Model):
-    def __init__(self, dstore, k: int, lmbda: float, *args, **kwargs):
+    def __init__(self, dstore, *args, **kwargs):
         super(KNNModel, self).__init__(*args, **kwargs)
-        self.k = k
         self.dstore = dstore
-        self.lmbda = lmbda
 
     def get_knn_scores_per_step(self, x):
         vocab_size = self.encoder.config.vocab_size

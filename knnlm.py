@@ -6,9 +6,13 @@ import torch
 import faiss
 import math
 import numpy as np
-from fairseq import utils
 import time
-from fairseq.data import Dictionary
+
+def log_softmax(x, dim: int, onnx_trace: bool = False):
+    if onnx_trace:
+        return F.log_softmax(x.float(), dim=dim)
+    else:
+        return F.log_softmax(x, dim=dim, dtype=torch.float32)
 
 class KNN_Dstore(object):
     def __init__(self, args):
@@ -122,7 +126,7 @@ class KNN_Dstore(object):
         dists = torch.from_numpy(dists).cuda()
         start = time.time()
         dists = self.dist_func(dists, knns, queries[tgt != pad_idx, :], function=self.sim_func)
-        probs = utils.log_softmax(dists, dim=-1)
+        probs = log_softmax(dists, dim=-1)
 
         index_mask = torch.eq(torch.from_numpy(self.vals[knns]).long().cuda().squeeze(-1), tgt[tgt != pad_idx].unsqueeze(-1)).float()
         index_mask[index_mask == 0] = -10000 # for stability
@@ -150,7 +154,7 @@ class KNN_Dstore(object):
         dists = self.dist_func(dists, knns, queries, function=self.sim_func)
         #print(dists)
         dists.div_(knn_temp)
-        probs = utils.log_softmax(dists, dim=-1).type(dtype=use_dtype)
+        probs = log_softmax(dists, dim=-1).type(dtype=use_dtype)
         #print(probs)
 
         # (Bxbeam_size)xK

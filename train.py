@@ -4,12 +4,13 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from TAE.knnlm import KNN_Dstore
 import wandb
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import argparse
 import torch
-from model import Model
+from model import Model, KNNModel
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 import pickle
@@ -230,6 +231,9 @@ def train(args):
 
 
     with torch.no_grad():
+        if args.knn:
+            dstore = KNN_Dstore(args)
+            model = KNNModel(dstore, pretrained_weights, args)
         model.load_state_dict(torch.load(os.path.join(args.save_dir, model_name)))
         model.eval()
         valid_loader = DataLoader(valid_dataset, batch_size=args.test_batch_size, shuffle=False,
