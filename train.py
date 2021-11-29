@@ -24,12 +24,14 @@ from utils import generate_model_name
 from torch.nn.utils.rnn import pad_sequence
 from dataset_preprocessing.django import Django
 from dataset_preprocessing.conala import Conala
+from dataset_preprocessing.csn import CodeSearchNet
 from dataset_preprocessing.small_sql import SmallSQL
 from dataset_preprocessing.wikisql.wikisql import Wikisql
 
 
 dataset_classes = {'django': Django,
                    'conala': Conala,
+                   'csn': CodeSearchNet,
                    'atis': SmallSQL,
                    'geography': SmallSQL,
                    'wikisql': Wikisql}
@@ -338,7 +340,8 @@ if __name__ == '__main__':
     resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
 
     args = parser.parse_args()
-    if args.dataset_name == 'django' or args.dataset_name == 'conala':
+    if args.dataset_name == 'django' or args.dataset_name == 'conala' \
+            or args.dataset_name == 'csn':
         args.python = True
     elif args.dataset_name == 'wikisql':
         if not args.translate_backward:
@@ -369,7 +372,7 @@ if __name__ == '__main__':
     if args.generate_back_translation:
         args.translate_backward = True
 
-    wandb.init(name="conala-reproduce",
+    wandb.init(name='conala-reproduce',
                config=vars(args))
 
     print(args)
