@@ -11,8 +11,8 @@ Afterward, run build_dstore.py with appropriate args to generate datastore.
 '''
 
 import os
-import pdb
 from tqdm import tqdm
+import pickle
 
 import torch
 from torch.utils.data import DataLoader
@@ -36,7 +36,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = Model('bert-base-uncased', args)
 model.to(device)
 model.device = device
-# model.load_state_dict(torch.load(args.pretrained_path))
+model.load_state_dict(torch.load(args.pretrained_path))
 model.eval()
 
 data_types = ['train', 'mined', 'code_only']
@@ -75,8 +75,10 @@ if not os.path.isdir('datastore'):
 
 dstore_keys = np.memmap(f'datastore/{args.data_type}_keys.npy', dtype=np.float16, mode='w+',
                         shape=(dstore_size, model.encoder.config.hidden_size))
-dstore_vals = np.memmap(f'datastore/{args.data_type}_values.npy', dtype=np.int, mode='w+',
+dstore_vals = np.memmap(f'datastore/{args.data_type}_vals.npy', dtype=np.int32, mode='w+',
                         shape=(dstore_size, 1))
+
+kv_pairs = []
 
 with torch.no_grad():
     offset = 0
@@ -84,16 +86,26 @@ with torch.no_grad():
         lengths = data['target']['attention_mask'].sum(dim=1)
         *_, prediction, generation_prediction = model(data)
         input_ids = data['target']['input_ids']
+        first = i == 0
         for pred, length, ids in zip(generation_prediction, lengths, input_ids):
             actual_length = length-1
+            for i in range(actual_length):
+                context = model.tokenizer.decode(ids[:i+1].cpu().tolist())
+                target = model.tokenizer.decode(int(ids[i+1])).replace(' ', '')
+                kv_pairs.append((context, target))
             dstore_keys[offset:offset+actual_length] = \
                 pred[:actual_length].cpu().numpy().astype(np.float16)
             # TODO: maybe values should be stored as int16?
             dstore_vals[offset:offset+actual_length] = \
-                ids[1:1+actual_length].view(-1, 1).cpu().numpy().astype(np.int)
+                ids[1:1+actual_length].view(-1, 1).cpu().numpy().astype(np.int32)
             offset += actual_length
+        if first: 
+            print(kv_pairs[:10])
 
 dstore_keys.flush()
 dstore_vals.flush()
 
 print('Finished saving vectors.')
+
+with open('datastore/kv_pairs.p', 'wb+') as f:
+    pickle.dump(kv_pairs, f)

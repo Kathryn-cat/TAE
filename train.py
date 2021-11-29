@@ -95,16 +95,16 @@ def train(args):
     if args.EMA:
         ema_model = EMA(model, args.ema_param)
     train_dataset, valid_dataset, test_dataset = load_dataset(args, model.tokenizer)
-    print_dataset_length_info(train_dataset)
+    # print_dataset_length_info(train_dataset)
     if args.small_dataset:
         train_dataset = train_dataset[:round(len(train_dataset)*args.percentage/100)]
     else:
         args.percentage = 100
     if args.copy_bt:
         args.batch_size = int(args.batch_size//(1+args.monolingual_ratio))
-    print("Effective batch size", args.batch_size)
+    # print("Effective batch size", args.batch_size)
     model_name = generate_model_name(args)
-    print("model name", model_name)
+    # print("model name", model_name)
     writer = SummaryWriter(log_dir=args.save_dir+'/logs/conalaexp/')
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
@@ -121,14 +121,14 @@ def train(args):
     print('train set size:', len(train_dataset))
     print('dev set size', len(valid_dataset))
     print('test set size', len(test_dataset))
-    print("example of parallel data")
-    print(model.tokenizer.decode(train_dataset[0]['intent']['input_ids']))
-    print(model.tokenizer.decode(train_dataset[0]['snippet']['input_ids']))
-    if args.copy_bt:
-        print(len(copy_dataset))
-        print("example of monolingual data")
-        print(model.tokenizer.decode(copy_dataset[0]['intent']['input_ids']))
-        print(model.tokenizer.decode(copy_dataset[0]['snippet']['input_ids']))
+    # print("example of parallel data")
+    # print(model.tokenizer.decode(train_dataset[0]['intent']['input_ids']))
+    # print(model.tokenizer.decode(train_dataset[0]['snippet']['input_ids']))
+    # if args.copy_bt:
+        # print(len(copy_dataset))
+        # print("example of monolingual data")
+        # print(model.tokenizer.decode(copy_dataset[0]['intent']['input_ids']))
+        # print(model.tokenizer.decode(copy_dataset[0]['snippet']['input_ids']))
 
     resume_file = os.path.join(args.save_dir, 'resume.pth')
     if not args.just_evaluate:
@@ -243,21 +243,29 @@ def train(args):
                                  num_workers=args.num_workers, pin_memory=True, collate_fn=preprocess_batch)
 
         loader = {'train': train_loader, 'dev': valid_loader, 'test': test_loader}
-        for split in ['dev', 'test']:
+        for split in ['test']: #,'dev']:
             for search in ['greedy', 'beam']:
-                file = os.path.join(args.save_dir, 'hype_{}_{}.pt'.format(split, search))
-                if os.path.exists(file):
-                    generated_set = pickle.load(open(file, 'rb'))
+                if args.knn:
+                    file = os.path.join(args.save_dir, 'knn_hype_{}_{}_{}_{}_{}.pt'.format(split, search, args.lmbda, args.k, args.probe))
                 else:
-                    generated_set = generate_hypothesis(args, loader[split], model, search=search)
-                    with open(file, 'wb') as f:
-                        pickle.dump(generated_set, f)
+                    file = os.path.join(args.save_dir, 'hype_{}_{}.pt'.format(split, search))
+                print(file)
+                # if os.path.exists(file):
+                    # generated_set = pickle.load(open(file, 'rb'))
+                # else:
+                generated_set = generate_hypothesis(args, loader[split], model, search=search)
+                with open(file, 'wb') as f:
+                    pickle.dump(generated_set, f)
                 metrics = compute_metric(generated_set, args.dataset_name, split=split, tokenizer=model.tokenizer, args=args)
                 print('{} {} accuracy'.format(split, search), metrics['exact_match'])
                 if search == 'beam':
                     print('{} {} oracle accuracy'.format(split, search), metrics['exact_oracle_match'])
                 print('{} {} bleu score'.format(split, search), metrics['bleu'])
                 print("{} {} exececution accuracy".format(split, search), metrics['exec_acc'])
+
+                with open('results.txt', 'a') as f:
+                    contents = f"{args.lmbda},{args.k},{args.probe},{metrics['exact_match']},{metrics['exact_oracle_match']},{metrics['bleu']}\n"
+                    f.write(contents)
 
     writer.close()
 
@@ -387,7 +395,7 @@ if __name__ == '__main__':
 
     args = get_args(parser)
 
-    wandb.init(name="conala-reproduce",
+    wandb.init(name="knn-code-gen",
                config=vars(args))
 
     print(args)

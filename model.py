@@ -24,7 +24,7 @@ class Model(nn.Module):
             self.encoder = BertModel(config)
         elif args.no_encoder:
             self.encoder = None
-        print(config)
+        # print(config)
         decoder_layer = MyTransformerDecoderLayer(config.hidden_size, config.num_attention_heads,
                                                 config.intermediate_size, dropout=0.1, activation='gelu')
         self.decoder = MyTransformerDecoder(decoder_layer, num_layers=args.decoder_layers, norm=LayerNorm(config.hidden_size))
@@ -116,17 +116,22 @@ class KNNModel(Model):
         vocab_size = self.encoder.config.vocab_size
         pad_id = self.tokenizer.pad_token_id
         return self.dstore.get_knn_scores_per_step(
-            x, vocab_size, pad_id
+            x, vocab_size, pad_id, #knn_temp=self.encoder.config.hidden_size
+            #save_knns=True
         )
 
     def interpolate(self, lprobs, knn_scores):
+        # import pdb; pdb.set_trace()
         # taken from knnmt/fairseq/sequence_generator.py
-        lprobs = torch.stack([lprobs.squeeze(dim=1), 
-                              knn_scores.to(lprobs.squeeze(dim=1))], dim=0)
-        coeffs = torch.ones_like(lprobs)
+        # lprobs = torch.stack([lprobs.squeeze(dim=1), 
+        #                       knn_scores.to(lprobs)], dim=0)
+        last_lprobs = torch.stack([lprobs[:, -1], knn_scores.to(lprobs)], dim=0)
+        coeffs = torch.ones_like(last_lprobs)
         coeffs[0] = np.log(1 - self.dstore.lmbda)
         coeffs[1] = np.log(self.dstore.lmbda)
-        lprobs = torch.logsumexp(lprobs + coeffs, dim=0)
+        last_lprobs = torch.logsumexp(last_lprobs + coeffs, dim=0)
+        lprobs[:, -1] = last_lprobs
+        # import pdb; pdb.set_trace()
         # lprobs is log of interpolated probability distribution
         return lprobs
 

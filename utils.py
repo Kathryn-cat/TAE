@@ -12,6 +12,7 @@ from babel.numbers import parse_decimal, NumberFormatError
 from dataset_preprocessing.wikisql.lib.query import Query
 import re
 import unicodedata
+from knnlm import log_softmax
 
 num_re = re.compile(r'[-+]?\d*\.\d+|\d+')
 
@@ -107,7 +108,7 @@ def make_parser():
                         help='controls interpolation with knn, 0.0 = no knn')
     parser.add_argument('--knn-sim-func', default=None, type=str, # don't actually need this one
                         help='similarity function to use for knns')
-    parser.add_argument('--use-faiss-only', action='store_true', default=True,
+    parser.add_argument('--use-faiss-only', action='store_true', default=False,
                         help='do not look up the keys/values from a separate array')
     parser.add_argument('--faiss_metric_type', type=str, default='l2',
                         help='distance metric for faiss')
@@ -258,8 +259,10 @@ def compute_loss(args, data, model, target_input=None, no_context_update=False, 
     )
 
     if test and args.knn:
-        knn_scores = model.get_knn_scores_per_step(generation_prediction)
-        logits = model.interpolate(logits, knn_scores)
+        lprobs = log_softmax(logits, dim=-1)
+        query = generation_prediction[:, -1:]
+        knn_scores = model.get_knn_scores_per_step(query)
+        logits = model.interpolate(lprobs, knn_scores)
 
     if args.pointer_network:
         labels = labels[:, 1:target['input_ids'].shape[1]].to(args.device)

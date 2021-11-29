@@ -55,7 +55,7 @@ class KNN_Dstore(object):
             print('Keys are fp16 and vals are int16')
             if not args.no_load_keys:
                 self.keys = np.memmap(args.dstore_filename+'_keys.npy', dtype=np.float16, mode='r', shape=(self.dstore_size, self.dimension))
-            self.vals = np.memmap(args.dstore_filename+'_vals.npy', dtype=np.int16, mode='r', shape=(self.dstore_size, 1))
+            self.vals = np.memmap(args.dstore_filename+'_vals.npy', dtype=np.int32, mode='r', shape=(self.dstore_size, 1)) # use 32 bit values
         else:
             print('Keys are fp32 and vals are int64')
             if not args.no_load_keys:
@@ -124,6 +124,7 @@ class KNN_Dstore(object):
         queries = queries.view(-1, qshape[-1])
         tgt = tgt.contiguous().view(-1)
         dists, knns = self.get_knns(queries[tgt != pad_idx])
+
         # (T_reducedxB)xK
         dists = torch.from_numpy(dists).cuda()
         start = time.time()
@@ -144,6 +145,7 @@ class KNN_Dstore(object):
 
     def get_knn_scores_per_step(self, queries, vocab_size, pad_idx, use_dtype=torch.float32, save_knns=False, knn_temp=1.0):
         qshape = queries.shape
+        # import pdb; pdb.set_trace()
         queries = queries.view(-1, qshape[-1])
         start_time = time.time()
         dists, knns = self.get_knns(queries)
@@ -152,7 +154,7 @@ class KNN_Dstore(object):
         dists = torch.from_numpy(dists).type(dtype=use_dtype).cuda()
         #print(dists)
         # TODO(urvashik): update to use full precision keys
-        #dists = -1 * dists
+        dists = -1 * dists # negative dists
         # dists = self.dist_func(dists, knns, queries, function=self.sim_func)
         #print(dists)
         dists.div_(knn_temp)
@@ -186,7 +188,6 @@ class KNN_Dstore(object):
         knn_vals_by_index = knn_vals_by_index.max(dim=1)[0]
         full_knn_scores = torch.ones([queries.shape[0], vocab_size], dtype=use_dtype).cuda()
         full_knn_scores[:] = -10000 #-math.inf
-        import pdb;pdb.set_trace()
         full_knn_scores.scatter_(dim=1, index=knn_vals_by_index, src=knn_scores_by_index)
         ## TRYING SOMETHING OUT
 

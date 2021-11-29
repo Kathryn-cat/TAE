@@ -86,7 +86,8 @@ def remove_spaces(mistake, intent):
     try:
         tree = ast.parse(no_space)
         return astor.to_source(tree).strip()
-    except SyntaxError:
+    except: # probably bad but whatever
+    #except SyntaxError:
         final_code_valid =False
         try:
             ast.parse(final_code)
