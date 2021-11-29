@@ -156,7 +156,7 @@ class Conala(MonolingualPython):
         json_file = os.path.join(self.dir_name, '{}.json'.format(self.split))
         if not os.path.exists(json_file):
             examples = self.preprocess_dataset(
-                os.path.join(self.dir_name, 'conala-corpus/conala-{}.json'.format(self.split if self.split != 'dev' else 'train')))
+                os.path.join(self.dir_name, f'{self.name}-corpus/{self.name}' + '-{}.json'.format(self.split if self.split != 'dev' else 'train')))
             if self.split == 'dev':
                 examples = examples[-200:]
             elif self.split == 'train':

@@ -25,6 +25,7 @@ from torch.nn.utils.rnn import pad_sequence
 from dataset_preprocessing.django import Django
 from dataset_preprocessing.conala import Conala
 from dataset_preprocessing.csn import CodeSearchNet
+from dataset_preprocessing.csn import CSNAugmentedConala
 from dataset_preprocessing.small_sql import SmallSQL
 from dataset_preprocessing.wikisql.wikisql import Wikisql
 
@@ -32,6 +33,7 @@ from dataset_preprocessing.wikisql.wikisql import Wikisql
 dataset_classes = {'django': Django,
                    'conala': Conala,
                    'csn': CodeSearchNet,
+                   'augcsn': CSNAugmentedConala,
                    'atis': SmallSQL,
                    'geography': SmallSQL,
                    'wikisql': Wikisql}
@@ -341,6 +343,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     if args.dataset_name == 'django' or args.dataset_name == 'conala' \
+            or args.dataset_name == 'augcsn' \
             or args.dataset_name == 'csn':
         args.python = True
     elif args.dataset_name == 'wikisql':

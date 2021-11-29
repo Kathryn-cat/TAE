@@ -83,25 +83,47 @@ class CodeSearchNet(Conala):
         # process test samples
         samples = []
         if not os.path.exists(os.path.join(self.dir_name, 'csn-corpus/csn-test.json')):
-            filename = f'python/final/jsonl/test/python_test_0.jsonl'
+            filename = 'python/final/jsonl/test/python_test_0.jsonl'
             samples, ix, processed_ix = self._process_datafile(filename, filter_fn)
             print(f'Processed {processed_ix} / {ix} testing samples.')
             with open(os.path.join(self.dir_name, 'csn-corpus/csn-test.json'), 'w') as f:
                 json.dump(samples, f)
 
-    def _preprocess(self):
-        json_file = os.path.join(self.dir_name, '{}.json'.format(self.split))
-        if not os.path.exists(json_file):
-            examples = self.preprocess_dataset(
-                os.path.join(self.dir_name, 'csn-corpus/csn-{}.json'.format(self.split if self.split != 'dev' else 'train')))
-            if self.split == 'dev':
-                examples = examples[-200:]
-            elif self.split == 'train':
-                examples = examples[:-200]
-            with open(os.path.join(self.dir_name, '{}.json'.format(self.split)), 'w') as f:
-                json.dump(examples, f)
-            return examples
-        else:
-            with open(json_file) as f:
-                examples = json.load(f)
-            return examples
+
+class CSNAugmentedConala(CodeSearchNet):
+    def __init__(self, name, split, tokenizer, args, monolingual=False):
+        self.threshold = {
+            'train': 100,
+            'dev': 100,
+            'test': 100
+        }
+        Dataset.__init__(self, 'augcsn', split, tokenizer, args, monolingual)
+
+    def _download_dataset(self):
+        prev_self_name = self.name
+        self.name = 'csn'; self.dir_name = os.path.join('data', self.name)
+        CodeSearchNet._download_dataset(self)
+        self.name = 'conala'; self.dir_name = os.path.join('data', self.name)
+        Conala._download_dataset(self)
+        self.name = prev_self_name; self.dir_name = os.path.join('data', self.name)
+
+        # build training set
+        output_train_path = os.path.join(self.dir_name, f'{self.name}-corpus/{self.name}-train.json')
+        if not os.path.exists(output_train_path):
+            os.makedirs(os.path.dirname(output_train_path), exist_ok=True)
+            csn_train_path = os.path.join('data', 'csn/csn-corpus/csn-train.json')
+            conala_train_path = os.path.join('data', 'conala/conala-corpus/conala-train.json')
+            with open(csn_train_path, 'r') as f:
+                csn_train_json = json.load(f)
+            with open(conala_train_path, 'r') as f:
+                conala_train_json = json.load(f)
+            aug_train_json = conala_train_json + csn_train_json
+            with open(output_train_path, 'w') as f:
+                json.dump(aug_train_json, f)
+
+        # copy test set from conala
+        output_test_path = os.path.join(self.dir_name, f'{self.name}-corpus/{self.name}-test.json')
+        if not os.path.exists(output_test_path):
+            os.makedirs(os.path.dirname(output_test_path), exist_ok=True)
+            conala_test_path = os.path.join('data', 'conala/conala-corpus/conala-test.json')
+            os.system(f'cp {conala_test_path} {output_test_path}') 
