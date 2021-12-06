@@ -138,7 +138,7 @@ def make_parser():
 
 def get_args(parser):
     args = parser.parse_args()
-    if args.dataset_name == 'django' or args.dataset_name == 'conala':
+    if args.dataset_name == 'django' or args.dataset_name == 'conala' or args.dataset_name == 'augcsn':
         args.python = True
     elif args.dataset_name == 'wikisql':
         if not args.translate_backward:
