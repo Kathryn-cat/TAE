@@ -1,0 +1,1 @@
+python3 train_ar.py --pretrained_path pretrained_weights/conala/resume.pth --data_type mined --save_dir pretrained_weights/conala --dstore-size 2086490 --dstore-fp16 --dstore-filename datastore/mined --indexfile datastore/mined_knn.index --dataset_name conala

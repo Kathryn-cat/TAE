@@ -14,7 +14,7 @@ python3 train.py --dataset_name conala \
     --k 64 \
     --probe 8 \
     --lmbda 0.8 \
-    --dstore-size 2090745 \
+    --dstore-size 2086490 \
     --dstore-filename datastore/mined \
     --indexfile datastore/mined_knn.index \
     --no-load-keys

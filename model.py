@@ -125,7 +125,6 @@ class KNNModel(Model):
         pad_id = self.tokenizer.pad_token_id
         return self.dstore.get_knn_scores_per_step(
             x, vocab_size, pad_id, #knn_temp=self.encoder.config.hidden_size
-            #save_knns=True
         )
 
     def interpolate(self, lprobs, knn_scores):
