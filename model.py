@@ -84,6 +84,14 @@ class Model(nn.Module):
         prediction = torch.transpose(prediction, 0, 1)
         generation_prediction = self.linear_before_softmax(prediction)
 
+        # pool info in encoder output and append to generation prediction
+        # in this way, the context vector will have encoder info
+        # knn_context will have shape [batch_size, seq_len, hid_size * 2]
+        pooled_encoder_output = torch.sum(encoder_output * source['attention_mask'][..., None], dim=1)
+        pooled_encoder_output /= torch.sum(source['attention_mask'], dim=1)[:, None]
+        pooled_encoder_output = torch.cat([pooled_encoder_output[:, None]] * prediction.shape[1], dim=1)
+        knn_context = torch.cat([pooled_encoder_output, generation_prediction], dim=-1)
+
         if self.args.pointer_network:
             choices_emb = self.myembedding.pembedding.word_embeddings(choices['input_ids'])
             logits = torch.einsum('bid, bjd->bij', prediction, choices_emb)
@@ -104,7 +112,7 @@ class Model(nn.Module):
             logits.scatter_add_(index=index.unsqueeze(1).expand(-1, logits.shape[1], -1),
                                 src=copy_attention, dim=2)
 
-        return logits, target, choices, label, prediction, generation_prediction
+        return logits, target, choices, label, prediction, knn_context
 
 
 class KNNModel(Model):
@@ -123,7 +131,7 @@ class KNNModel(Model):
     def interpolate(self, lprobs, knn_scores):
         # import pdb; pdb.set_trace()
         # taken from knnmt/fairseq/sequence_generator.py
-        # lprobs = torch.stack([lprobs.squeeze(dim=1), 
+        # lprobs = torch.stack([lprobs.squeeze(dim=1),
         #                       knn_scores.to(lprobs)], dim=0)
         last_lprobs = torch.stack([lprobs[:, -1], knn_scores.to(lprobs)], dim=0)
         coeffs = torch.ones_like(last_lprobs)

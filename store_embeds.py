@@ -66,15 +66,17 @@ with torch.no_grad():
     for data in tqdm(loader):
         lengths = data['target']['attention_mask'].sum(dim=1) - 1
         dstore_size += lengths.sum()
+
+key_size = model.encoder.config.hidden_size * 2
     
 print('Total # of target tokens:', dstore_size)
-print('Size of each key:', model.encoder.config.hidden_size)
+print('Size of each key:', )
 
 if not os.path.isdir('datastore'):
     os.mkdir('datastore')
 
 dstore_keys = np.memmap(f'datastore/{args.data_type}_keys.npy', dtype=np.float16, mode='w+',
-                        shape=(dstore_size, model.encoder.config.hidden_size))
+                        shape=(dstore_size, key_size))
 dstore_vals = np.memmap(f'datastore/{args.data_type}_vals.npy', dtype=np.int32, mode='w+',
                         shape=(dstore_size, 1))
 
