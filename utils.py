@@ -106,6 +106,8 @@ def make_parser():
                             help='for FAISS, the number of lists to query')
     parser.add_argument('--lmbda', default=0.0, type=float,
                         help='controls interpolation with knn, 0.0 = no knn')
+    parser.add_argument('--knn_temp', default=1.0, type=float,
+                        help='temperature for knn distribution')
     parser.add_argument('--knn-sim-func', default=None, type=str, # don't actually need this one
                         help='similarity function to use for knns')
     parser.add_argument('--use-faiss-only', action='store_true', default=False,
@@ -248,21 +250,47 @@ def LabelSmoothingCrossEntropy(preds, target, args, choices_attention=None):
         return nll
 
 
-def compute_loss(args, data, model, target_input=None, no_context_update=False, encoder_output_saved=None, test=False):
+def compute_loss(args, data, model, target_input=None, no_context_update=False, encoder_output_saved=None, test=False, print_nn=False):
     target_input_model = None
     if target_input is not None:
         target_input_model = target_input
-    logits, target, choices, labels, hidden, generation_prediction = (
+    logits, target, choices, labels, hidden, last_ffn = (
         model(data, target_input=target_input_model, 
               no_context_update=no_context_update,
-              encoder_output_saved=encoder_output_saved)
+              encoder_output_saved=encoder_output_saved,
+              ret_last_ffn=True)
     )
 
     if test and args.knn:
         lprobs = log_softmax(logits, dim=-1)
-        query = generation_prediction[:, -1:]
-        knn_scores = model.get_knn_scores_per_step(query)
+        query = last_ffn[:, -1:]
+        knn_scores = model.get_knn_scores_per_step(query, save_knns=print_nn)
+        if print_nn:
+            import pdb; pdb.set_trace()
+            knn_scores, (knns, probs, indices) = knn_scores
+            intent = model.tokenizer.decode(data['source']['input_ids'][0])
+            print('Intent:', intent[:intent.find('[PAD]')])
+            print('Generated:', model.tokenizer.decode(target_input['input_ids'][0, :-1]))
+            print('Nearest neighbors:')
+            for i, n, p in zip(range(10), knns[0][:10], probs[0][:10]):
+                print(f'({i})', ' ==> '.join(model.dstore.kv_pairs[n]), '|| score =', float(p.detach().cpu()))
+            topk = torch.topk(knn_scores[0], 5)
+            print('KNN distribution:')
+            for idx, value in zip(topk.indices, topk.values):
+                print(model.tokenizer.decode(int(idx)).replace(' ', ''), '==>', float(value.detach().cpu()))
+            lp_topk = torch.topk(lprobs[0, -1], 5)
+            print('seq2seq distribution')
+            for idx, value in zip(lp_topk.indices, lp_topk.values):
+                print(model.tokenizer.decode(int(idx)).replace(' ', ''), '==>', float(value.detach().cpu()))
+            
         logits = model.interpolate(lprobs, knn_scores)
+
+        if print_nn:
+            print('interpolated distribution')
+            log_topk = torch.topk(logits[0, -1], 5)
+            for idx, value in zip(log_topk.indices, log_topk.values):
+                print(model.tokenizer.decode(int(idx)).replace(' ', ''), '==>', float(value.detach().cpu()))
+            print('*********************************************************\n')
 
     if args.pointer_network:
         labels = labels[:, 1:target['input_ids'].shape[1]].to(args.device)

@@ -48,7 +48,9 @@ class Model(nn.Module):
             encoder_output = torch.transpose(encoder_output, 0, 1)
         return encoder_output
 
-    def forward(self, data, target_input=None, no_encoder=None, no_context_update=False, return_encoder_output=False, encoder_output_saved=None):
+    def forward(self, data, target_input=None, no_encoder=None, 
+                no_context_update=False, return_encoder_output=False, 
+                encoder_output_saved=None, ret_last_ffn=False):
         source = {key: value.to(self.device) for key, value in data['source'].items()}
         target = {key: value.to(self.device) for key, value in data['target'].items()}
         label, choices = None, None
@@ -79,8 +81,12 @@ class Model(nn.Module):
                                   tgt_key_padding_mask=target['attention_mask'][:, :-1] == 0,
                                   memory_key_padding_mask=(source['attention_mask'] == 0) if not self.args.no_encoder else None,
                                   no_memory=self.args.no_encoder,
-                                  no_context_update=False
+                                  no_context_update=False,
+                                  ret_last_ffn=ret_last_ffn
                                   )
+        if ret_last_ffn:
+            prediction, last_ffn = prediction
+            last_ffn = torch.transpose(last_ffn, 0, 1)
         prediction = torch.transpose(prediction, 0, 1)
         generation_prediction = self.linear_before_softmax(prediction)
 
@@ -112,6 +118,8 @@ class Model(nn.Module):
             logits.scatter_add_(index=index.unsqueeze(1).expand(-1, logits.shape[1], -1),
                                 src=copy_attention, dim=2)
 
+        if ret_last_ffn:
+            return logits, target, choices, label, prediction, last_ffn
         return logits, target, choices, label, prediction, knn_context
 
 
@@ -120,11 +128,11 @@ class KNNModel(Model):
         super(KNNModel, self).__init__(*args, **kwargs)
         self.dstore = dstore
 
-    def get_knn_scores_per_step(self, x):
+    def get_knn_scores_per_step(self, x, save_knns=False):
         vocab_size = self.encoder.config.vocab_size
         pad_id = self.tokenizer.pad_token_id
         return self.dstore.get_knn_scores_per_step(
-            x, vocab_size, pad_id, #knn_temp=self.encoder.config.hidden_size
+            x, vocab_size, pad_id, save_knns=save_knns
         )
 
     def interpolate(self, lprobs, knn_scores):

@@ -12,7 +12,8 @@ class MyTransformerDecoder(TransformerDecoder):
 
     def forward(self, tgt, memory, tgt_mask=None,
                 memory_mask=None, tgt_key_padding_mask=None,
-                memory_key_padding_mask=None, no_context_update=False, no_memory=False):
+                memory_key_padding_mask=None, no_context_update=False, 
+                no_memory=False, ret_last_ffn=False):
         output = tgt
 
         for i in range(self.num_layers):
@@ -20,11 +21,17 @@ class MyTransformerDecoder(TransformerDecoder):
                                     memory_mask=memory_mask,
                                     tgt_key_padding_mask=tgt_key_padding_mask,
                                     memory_key_padding_mask=memory_key_padding_mask,
-                                    no_context_update=no_context_update, no_memory=no_memory)
+                                    no_context_update=no_context_update, no_memory=no_memory,
+                                    ret_last_ffn=(ret_last_ffn and i == self.num_layers-1)) 
+
+        if ret_last_ffn:
+            output, last_ffn = output
 
         if self.norm:
             output = self.norm(output)
 
+        if ret_last_ffn:
+            return output, last_ffn
         return output
 
 
@@ -36,11 +43,14 @@ class MyTransformerDecoderLayer(TransformerDecoderLayer):
 
     def forward(self, tgt, memory=None, tgt_mask=None, memory_mask=None,
                 tgt_key_padding_mask=None, memory_key_padding_mask=None,
-                no_context_update=False, no_memory=False):
+                no_context_update=False, no_memory=False, ret_last_ffn=False):
         tgt2 = self.self_attn(tgt, tgt, tgt, attn_mask=tgt_mask,
                               key_padding_mask=tgt_key_padding_mask)[0]
         tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)
+
+        if ret_last_ffn:
+            last_ffn = torch.clone(tgt)
 
         if not no_memory:
             if no_context_update:
@@ -59,6 +69,9 @@ class MyTransformerDecoderLayer(TransformerDecoderLayer):
             tgt2 = self.linear2(self.dropout(F.relu(self.linear1(tgt))))
         tgt = tgt + self.dropout3(tgt2)
         tgt = self.norm3(tgt)
+
+        if ret_last_ffn:
+            return tgt, last_ffn
         return tgt
 
 

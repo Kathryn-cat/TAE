@@ -24,6 +24,7 @@ args.pointer_network = False
 
 dstore = KNN_Dstore(args)
 model = KNNModel(dstore, 'bert-base-uncased', args)
+# model = Model('bert-base-uncased', args)
 model.to(args.device)
 model.load_state_dict(torch.load(os.path.join(args.save_dir, 'conala_weights.pth')))
 model.eval()
@@ -49,11 +50,11 @@ vals = np.memmap(f'datastore/train_vals.npy', dtype=np.int32, mode='r',
 data = next(iter(train_loader))
 input_ids = data['target']['input_ids']
 
-logits, *_, prediction, generation_prediction = model(data)
+logits, *_, prediction, last_ffn = model(data, ret_last_ffn=True)
 
-query = generation_prediction[:, 0].unsqueeze(1)
+query = last_ffn[:, 0].unsqueeze(1)
 
 knn_scores, (knns, probs, indices) = model.get_knn_scores_per_step(query)
 
-with open('datastore/mined_kv_pairs.p', 'rb') as f:
+with open('datastore/kv_pairs.p', 'rb') as f:
     kv_pairs = pickle.load(f)

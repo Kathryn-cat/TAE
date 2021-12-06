@@ -25,7 +25,7 @@ from model import Model
 parser = make_parser()
 parser.add_argument('--pretrained_path', type=str, help='Location of pretrained model')
 parser.add_argument('--data_type', type=str, 
-    choices=['train', 'mined', 'code_only'], default='train', 
+    choices=['train', 'mined', 'csn'], default='train', 
     help='Type of data used in the store (each is a superset of the previous)')
 args = get_args(parser)
 
@@ -39,7 +39,7 @@ model.device = device
 model.load_state_dict(torch.load(args.pretrained_path))
 model.eval()
 
-data_types = ['train', 'mined', 'code_only']
+data_types = ['train', 'mined', 'csn']
 data_types = data_types[:data_types.index(args.data_type)+1]
 
 datasets = []
@@ -47,7 +47,7 @@ if 'train' in data_types:
     datasets.append(Conala('conala', 'train', model.tokenizer, args, monolingual=False))
 if 'mined' in data_types:
     datasets.append(Conala('conala', 'train', model.tokenizer, args, monolingual=True))
-if 'code_only' in data_types:
+if 'csn' in data_types:
     raise NotImplementedError # need to get code-only data first
 
 full_dataset = datasets[0]
@@ -86,17 +86,17 @@ with torch.no_grad():
     offset = 0
     for i, data in enumerate(tqdm(loader)):
         lengths = data['target']['attention_mask'].sum(dim=1)
-        *_, prediction, generation_prediction = model(data)
+        *_, prediction, last_ffn = model(data, ret_last_ffn=True)
         input_ids = data['target']['input_ids']
         first = i == 0
-        for pred, length, ids in zip(generation_prediction, lengths, input_ids):
+        for embed, length, ids in zip(last_ffn, lengths, input_ids):
             actual_length = length-1
             for i in range(actual_length):
                 context = model.tokenizer.decode(ids[:i+1].cpu().tolist())
                 target = model.tokenizer.decode(int(ids[i+1])).replace(' ', '')
                 kv_pairs.append((context, target))
             dstore_keys[offset:offset+actual_length] = \
-                pred[:actual_length].cpu().numpy().astype(np.float16)
+                embed[:actual_length].cpu().numpy().astype(np.float16)
             # TODO: maybe values should be stored as int16?
             dstore_vals[offset:offset+actual_length] = \
                 ids[1:1+actual_length].view(-1, 1).cpu().numpy().astype(np.int32)

@@ -2,6 +2,7 @@
 Taken from https://github.com/urvashik/knnmt
 '''
 
+import pickle
 import torch
 import torch.nn.functional as F
 import faiss
@@ -30,7 +31,10 @@ class KNN_Dstore(object):
         self.use_faiss_only = args.use_faiss_only
         self.index = self.setup_faiss(args)
         self.lmbda = args.lmbda
+        self.knn_temp = args.knn_temp
 
+        with open(args.dstore_filename + '_kv_pairs.p', 'rb') as f:
+            self.kv_pairs = pickle.load(f)
 
     def setup_faiss(self, args):
         if not args.indexfile:
@@ -52,7 +56,7 @@ class KNN_Dstore(object):
             return index
 
         if args.dstore_fp16:
-            print('Keys are fp16 and vals are int16')
+            print('Keys are fp16 and vals are int32')
             if not args.no_load_keys:
                 self.keys = np.memmap(args.dstore_filename+'_keys.npy', dtype=np.float16, mode='r', shape=(self.dstore_size, self.dimension))
             self.vals = np.memmap(args.dstore_filename+'_vals.npy', dtype=np.int32, mode='r', shape=(self.dstore_size, 1)) # use 32 bit values
@@ -60,7 +64,7 @@ class KNN_Dstore(object):
             print('Keys are fp32 and vals are int64')
             if not args.no_load_keys:
                 self.keys = np.memmap(args.dstore_filename+'_keys.npy', dtype=np.float32, mode='r', shape=(self.dstore_size, self.dimension))
-            self.vals = np.memmap(args.dstore_filename+'_vals.npy', dtype=np.int, mode='r', shape=(self.dstore_size, 1))
+            self.vals = np.memmap(args.dstore_filename+'_vals.npy', dtype=np.int64, mode='r', shape=(self.dstore_size, 1))
 
         # If you wish to load all the keys into memory
         # CAUTION: Only do this if your RAM can handle it!
@@ -143,7 +147,7 @@ class KNN_Dstore(object):
         # TxBx1
         return full_yhat_knn_prob.view(qshape[0], qshape[1], 1)
 
-    def get_knn_scores_per_step(self, queries, vocab_size, pad_idx, use_dtype=torch.float32, save_knns=False, knn_temp=1.0):
+    def get_knn_scores_per_step(self, queries, vocab_size, pad_idx, use_dtype=torch.float32, save_knns=False):#, knn_temp=1.0):
         qshape = queries.shape
         # import pdb; pdb.set_trace()
         queries = queries.view(-1, qshape[-1])
@@ -157,7 +161,7 @@ class KNN_Dstore(object):
         dists = -1 * dists # negative dists
         # dists = self.dist_func(dists, knns, queries, function=self.sim_func)
         #print(dists)
-        dists.div_(knn_temp)
+        dists.div_(self.knn_temp)
         probs = log_softmax(dists, dim=-1).type(dtype=use_dtype)
         #print(probs)
 

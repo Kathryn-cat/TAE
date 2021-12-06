@@ -15,21 +15,20 @@ nohup python3 train.py --dataset_name conala \
     --k {} \
     --probe {} \
     --lmbda {} \
-    --dstore-size 50044 \
-    --dstore-filename datastore/train \
-    --indexfile datastore/train_knn.index \
+    --knn_temp {} \
+    --dstore-size 2090745 \
+    --dstore-filename datastore/mined \
+    --indexfile datastore/mined_knn.index \
     --no-load-keys'''
 
 # make results file
 with open('results.txt', 'w+') as f:
     pass
 
-for probe in [8, 16]:
-    for k in [32, 64, 128, 256, 512][::-1]:
-        for lmbda in [0.6, 0.7, 0.8, 0.9, 0.95][::-1]:
-            try:
-                execute = cmd.format(k, probe, lmbda)
+for temp in [1000]:
+    for probe in [32]:
+        for k in [32, 64, 128, 256]:
+            for lmbda in [0.01, 0.05, 0.1, 0.15, 0.20, 0.25]:
+                execute = cmd.format(k, probe, lmbda, temp)
                 print(execute)
                 os.system(execute)
-            except KeyboardInterrupt:
-                os._exit(0)
