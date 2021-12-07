@@ -284,7 +284,7 @@ def compute_loss(args, data, model, target_input=None, no_context_update=False, 
             for idx, value in zip(lp_topk.indices, lp_topk.values):
                 print(model.tokenizer.decode(int(idx)).replace(' ', ''), '==>', float(value.detach().cpu()))
             
-        logits = model.interpolate(lprobs, knn_scores, knn_context=last_ffn)
+        logits = model.interpolate(lprobs, knn_scores)
 
         if print_nn:
             print('interpolated distribution')

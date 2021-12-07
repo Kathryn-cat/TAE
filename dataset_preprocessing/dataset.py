@@ -32,6 +32,7 @@ class Dataset(Dataset):
         self.args = args
         binary_file = os.path.join(self.dir_name, '{}{}.bin'.format(split, '_mono' if monolingual else ''))
         if os.path.exists(binary_file):
+            print('loading data from', binary_file)
             self.data = pickle.load(open(binary_file, 'rb'))
         else:
             if not os.path.exists(self.dir_name):

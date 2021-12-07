@@ -22,6 +22,7 @@ parser.add_argument('--faiss_index', type=str, help='file to write the faiss ind
 parser.add_argument('--num_keys_to_add_at_a_time', default=1000000, type=int,
                     help='can only load a certain amount of data to memory at a time.')
 parser.add_argument('--starting_point', type=int, help='index to start adding keys at')
+parser.add_argument('--pca_dim', type=int, default=0, help='dimension after pca')
 args = parser.parse_args()
 
 print(args)
@@ -35,10 +36,15 @@ else:
 
 if not os.path.exists(args.faiss_index+".trained"):
     # Initialize faiss index
-    quantizer = faiss.IndexFlatL2(args.dimension)
-    index = faiss.IndexIVFPQ(quantizer, args.dimension,
+    index_dim = args.pca_dim if args.pca_dim > 0 else args.dimension
+    quantizer = faiss.IndexFlatL2(index_dim)
+    index = faiss.IndexIVFPQ(quantizer, index_dim,
         args.ncentroids, args.code_size, 8)
     index.nprobe = args.probe
+
+    if args.pca_dim > 0:
+        pca_matrix = faiss.PCAMatrix(args.dimension, args.pca_dim, 0, True)
+        index = faiss.IndexPreTransform(pca_matrix, index)
 
     print('Training Index')
     np.random.seed(args.seed)

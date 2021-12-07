@@ -66,7 +66,7 @@ for epoch_ix in tqdm(range(args.epochs)):
     for i, data in enumerate(tqdm(loader)):
         mask = data['target']['attention_mask']
         lengths = (mask.sum(dim=1) - 1).detach().cpu().numpy()
-        logits, _, _, _, _, knn_query = model(data)
+        logits, _, _, _, _, knn_query = model(data, ret_last_ffn=True)
         label = data['target']['input_ids'][:, 1:].to(device)
         tae_lprobs = F.log_softmax(logits, dim=-1) # [bs, seq_len, num_tokens]
 
