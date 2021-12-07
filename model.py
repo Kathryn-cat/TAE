@@ -93,10 +93,17 @@ class Model(nn.Module):
         # pool info in encoder output and append to generation prediction
         # in this way, the context vector will have encoder info
         # knn_context will have shape [batch_size, seq_len, hid_size * 2]
-        pooled_encoder_output = torch.sum(encoder_output * source['attention_mask'][..., None], dim=1)
-        pooled_encoder_output /= torch.sum(source['attention_mask'], dim=1)[:, None]
-        pooled_encoder_output = torch.cat([pooled_encoder_output[:, None]] * prediction.shape[1], dim=1)
-        knn_context = torch.cat([pooled_encoder_output, generation_prediction], dim=-1)
+        # pooled_encoder_output = torch.sum(encoder_output * source['attention_mask'][..., None], dim=1)
+        # pooled_encoder_output /= torch.sum(source['attention_mask'], dim=1)[:, None]
+        # pooled_encoder_output = torch.cat([pooled_encoder_output[:, None]] * prediction.shape[1], dim=1)
+
+        # just take <CLS> token output
+        pooled_encoder_output = encoder_output[:, 0].unsqueeze(1).expand(prediction.shape)
+        
+        if ret_last_ffn:
+            knn_context = torch.cat([pooled_encoder_output, last_ffn], dim=-1)
+        else:
+            knn_context = torch.cat([pooled_encoder_output, generation_prediction], dim=-1)
 
         if self.args.pointer_network:
             choices_emb = self.myembedding.pembedding.word_embeddings(choices['input_ids'])
@@ -118,8 +125,8 @@ class Model(nn.Module):
             logits.scatter_add_(index=index.unsqueeze(1).expand(-1, logits.shape[1], -1),
                                 src=copy_attention, dim=2)
 
-        if ret_last_ffn:
-            return logits, target, choices, label, prediction, last_ffn
+        # if ret_last_ffn:
+            # return logits, target, choices, label, prediction, knn_context
         return logits, target, choices, label, prediction, knn_context
 
 
@@ -135,20 +142,26 @@ class KNNModel(Model):
             x, vocab_size, pad_id, save_knns=save_knns
         )
 
-    def interpolate(self, lprobs, knn_scores):
+    def interpolate(self, lprobs, knn_scores, inplace=True):
         # import pdb; pdb.set_trace()
         # taken from knnmt/fairseq/sequence_generator.py
         # lprobs = torch.stack([lprobs.squeeze(dim=1),
         #                       knn_scores.to(lprobs)], dim=0)
+        # knn_scores: (batch, vocab_size)
         last_lprobs = torch.stack([lprobs[:, -1], knn_scores.to(lprobs)], dim=0)
-        coeffs = torch.ones_like(last_lprobs)
-        coeffs[0] = np.log(1 - self.dstore.lmbda)
-        coeffs[1] = np.log(self.dstore.lmbda)
+        # coeffs = torch.ones_like(last_lprobs)
+        # coeffs[0] = torch.log(1 - self.dstore.lmbda)
+        # coeffs[1] = torch.log(self.dstore.lmbda)
+        model_coeff = torch.zeros(knn_scores.shape).to(last_lprobs) + torch.log(1 - self.dstore.lmbda)
+        knn_coeff = torch.zeros(knn_scores.shape).to(last_lprobs) + torch.log(self.dstore.lmbda)
+        coeffs = torch.stack([model_coeff, knn_coeff], dim=0)
         last_lprobs = torch.logsumexp(last_lprobs + coeffs, dim=0)
-        lprobs[:, -1] = last_lprobs
-        # import pdb; pdb.set_trace()
-        # lprobs is log of interpolated probability distribution
-        return lprobs
+        if inplace:
+            lprobs[:, -1] = last_lprobs
+            # lprobs is log of interpolated probability distribution
+            return lprobs
+        else:
+            return last_lprobs
 
 
 class MyEmbedding(nn.Module):

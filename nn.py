@@ -60,6 +60,8 @@ class MyTransformerDecoderLayer(TransformerDecoderLayer):
             else:
                 tgt2 = self.multihead_attn(tgt, memory, memory, attn_mask=memory_mask,
                                            key_padding_mask=memory_key_padding_mask)[0]
+            # if ret_last_ffn:
+                # cross_attn = torch.clone(tgt2)
             tgt = tgt + self.dropout2(tgt2)
             tgt = self.norm2(tgt)
 
@@ -70,6 +72,8 @@ class MyTransformerDecoderLayer(TransformerDecoderLayer):
         tgt = tgt + self.dropout3(tgt2)
         tgt = self.norm3(tgt)
 
+        # if not no_memory and ret_last_ffn:
+            # return tgt, last_ffn, cross_attn
         if ret_last_ffn:
             return tgt, last_ffn
         return tgt

@@ -2,6 +2,7 @@
 Taken from https://github.com/urvashik/knnmt
 '''
 
+import os
 import pickle
 import torch
 import torch.nn.functional as F
@@ -33,8 +34,10 @@ class KNN_Dstore(object):
         self.lmbda = args.lmbda
         self.knn_temp = args.knn_temp
 
-        with open(args.dstore_filename + '_kv_pairs.p', 'rb') as f:
-            self.kv_pairs = pickle.load(f)
+        kv_pairs_path = args.dstore_filename + '_kv_pairs.p'
+        if os.path.isfile(kv_pairs_path):
+            with open(kv_pairs_path, 'rb') as f:
+                self.kv_pairs = pickle.load(f)
 
     def setup_faiss(self, args):
         if not args.indexfile:

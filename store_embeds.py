@@ -5,7 +5,7 @@ Run with:
 python3 store_embeds.py \
     --dataset_name conala \
     --pretrained_path {path/to/pretrained/model}
-    --data_type ['train', 'mined']
+    --data_type ['train', 'mined', 'csn']
 
 Afterward, run build_dstore.py with appropriate args to generate datastore.
 '''
@@ -18,6 +18,7 @@ import torch
 from torch.utils.data import DataLoader
 
 import numpy as np
+from dataset_preprocessing.csn import CodeSearchNet
 from dataset_preprocessing.conala import Conala
 from utils import make_parser, get_args, preprocess_batch
 from model import Model
@@ -27,6 +28,7 @@ parser.add_argument('--pretrained_path', type=str, help='Location of pretrained 
 parser.add_argument('--data_type', type=str, 
     choices=['train', 'mined', 'csn'], default='train', 
     help='Type of data used in the store (each is a superset of the previous)')
+parser.add_argument('--save_kv_pairs', action='store_true', default=False)
 args = get_args(parser)
 
 print(args)
@@ -48,7 +50,7 @@ if 'train' in data_types:
 if 'mined' in data_types:
     datasets.append(Conala('conala', 'train', model.tokenizer, args, monolingual=True))
 if 'csn' in data_types:
-    raise NotImplementedError # need to get code-only data first
+    datasets.append(CodeSearchNet('csn', 'train', model.tokenizer, args))
 
 full_dataset = datasets[0]
 for i in range(1, len(datasets)):
@@ -67,10 +69,11 @@ with torch.no_grad():
         lengths = data['target']['attention_mask'].sum(dim=1) - 1
         dstore_size += lengths.sum()
 
-key_size = model.encoder.config.hidden_size * 2
-    
+# key_size = model.encoder.config.hidden_size # for no encoder context
+key_size = model.encoder.config.hidden_size * 2 # for encoder context
+
 print('Total # of target tokens:', dstore_size)
-print('Size of each key:', )
+print('Size of each key:', key_size)
 
 if not os.path.isdir('datastore'):
     os.mkdir('datastore')
@@ -80,28 +83,30 @@ dstore_keys = np.memmap(f'datastore/{args.data_type}_keys.npy', dtype=np.float16
 dstore_vals = np.memmap(f'datastore/{args.data_type}_vals.npy', dtype=np.int32, mode='w+',
                         shape=(dstore_size, 1))
 
-kv_pairs = []
+if args.save_kv_pairs:
+    kv_pairs = []
 
 with torch.no_grad():
     offset = 0
     for i, data in enumerate(tqdm(loader)):
         lengths = data['target']['attention_mask'].sum(dim=1)
-        *_, prediction, last_ffn = model(data, ret_last_ffn=True)
+        *_, knn_context = model(data, ret_last_ffn=True)
         input_ids = data['target']['input_ids']
         first = i == 0
-        for embed, length, ids in zip(last_ffn, lengths, input_ids):
+        for embed, length, ids in zip(knn_context, lengths, input_ids):
             actual_length = length-1
-            for i in range(actual_length):
-                context = model.tokenizer.decode(ids[:i+1].cpu().tolist())
-                target = model.tokenizer.decode(int(ids[i+1])).replace(' ', '')
-                kv_pairs.append((context, target))
+            if args.save_kv_pairs:
+                for i in range(actual_length):
+                    context = model.tokenizer.decode(ids[:i+1].cpu().tolist())
+                    target = model.tokenizer.decode(int(ids[i+1])).replace(' ', '')
+                    kv_pairs.append((context, target))
             dstore_keys[offset:offset+actual_length] = \
-                embed[:actual_length].cpu().numpy().astype(np.float16)
+                embed[:actual_length, -key_size:].cpu().numpy().astype(np.float16)
             # TODO: maybe values should be stored as int16?
             dstore_vals[offset:offset+actual_length] = \
                 ids[1:1+actual_length].view(-1, 1).cpu().numpy().astype(np.int32)
             offset += actual_length
-        if first: 
+        if first and args.save_kv_pairs:
             print(kv_pairs[:10])
 
 dstore_keys.flush()
@@ -109,5 +114,6 @@ dstore_vals.flush()
 
 print('Finished saving vectors.')
 
-with open('datastore/kv_pairs.p', 'wb+') as f:
-    pickle.dump(kv_pairs, f)
+if args.save_kv_pairs:
+    with open('datastore/kv_pairs.p', 'wb+') as f:
+        pickle.dump(kv_pairs, f)

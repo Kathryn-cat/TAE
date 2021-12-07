@@ -47,7 +47,7 @@ def load_dataset(args, tokenizer):
 
 train_dataset, valid_dataset, test_dataset = load_dataset(args, model.tokenizer)
 
-loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False,
+loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False,
                     num_workers=0, pin_memory=True, collate_fn=preprocess_batch)
 
 # initialize adaptive retrieval model
@@ -76,9 +76,9 @@ for epoch_ix in tqdm(range(args.epochs)):
     for i, data in enumerate(tqdm(loader)):
         mask = data['target']['attention_mask']
         lengths = (mask.sum(dim=1) - 1).detach().cpu().numpy()
-        logits, _, _, _, _, knn_query = model(data)
+        logits, _, _, _, _, knn_query = model(data, ret_last_ffn=True)
         label = data['target']['input_ids'][:, 1:].to(device)
-        tae_probs = F.softmax(logits, dim=-1) # [bs, seq_len, num_tokens]
+        tae_probs = F.log_softmax(logits, dim=-1) # [bs, seq_len, num_tokens]
 
         # sample a token in every sample
         # we are doing this so knn lookup doesn't blow up gpu memory
@@ -95,12 +95,14 @@ for epoch_ix in tqdm(range(args.epochs)):
 
         # get knn probs
         knn_logprobs = model.get_knn_scores_per_step(knn_query[:, None])
-        knn_probs = torch.exp(knn_logprobs)
+        # knn_probs = torch.exp(knn_logprobs)
 
         lam = ar_model(knn_query)
-        combined_probs = lam * knn_probs + (1 - lam) * tae_probs
+        model.dstore.lmbda = lam
+        combined_probs = model.interpolate(tae_probs.unsqueeze(1), knn_logprobs, inplace=False)
+        # combined_probs = lam * knn_probs + (1 - lam) * tae_probs
 
-        loss = torch.log((combined_probs * label_onehot).sum(-1)).mean()
+        loss = (combined_probs * label_onehot).sum(-1).mean()
         loss += args.reg_coeff * torch.mean(lam)
 
         optimizer.zero_grad()
@@ -109,7 +111,7 @@ for epoch_ix in tqdm(range(args.epochs)):
 
     # log per-token accuracy
     acc_tae_only = compute_acc(tae_probs, label)
-    acc_knn_only = compute_acc(knn_probs, label)
+    acc_knn_only = compute_acc(knn_logprobs, label)
     acc_combined = compute_acc(combined_probs, label)
     print(f'[Ep {epoch_ix}] - acc_tae {acc_tae_only}; acc_knn {acc_knn_only}; acc_combined {acc_combined}')
     print(f'         avg_lambda {(torch.mean(lam)).detach().cpu().numpy().round(3)}')

@@ -236,7 +236,7 @@ def train(args):
             dstore = KNN_Dstore(args)
             model = KNNModel(dstore, pretrained_weights, args)
             model.to(args.device)
-        model.load_state_dict(torch.load(os.path.join(args.save_dir, 'resume.pth')))
+        model.load_state_dict(torch.load(os.path.join(args.save_dir, 'conala_weights.pth')))
         model.eval()
         valid_loader = DataLoader(valid_dataset, batch_size=args.test_batch_size, shuffle=False,
                                   num_workers=args.num_workers, pin_memory=True, collate_fn=preprocess_batch)
