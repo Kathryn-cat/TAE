@@ -15,14 +15,14 @@ import numpy as np
 from dataset_preprocessing.conala import Conala
 from utils import make_parser, get_args, preprocess_batch
 from knnlm import KNN_Dstore
-from model import Model, KNNModel
+from model import Model, KNNModel, ARModel
 
 parser = make_parser()
 parser.add_argument('--pretrained_path', type=str, help='Path to pretrained model.')
 parser.add_argument('--data_type', type=str,
     choices=['train', 'mined', 'code_only'], default='train',
     help='Type of data used in the store (each is a superset of the previous)')
-parser.add_argument('--reg_coeff', type=float, default=0.1)
+parser.add_argument('--reg_coeff', type=float, default=0.05)
 parser.add_argument('--lr', type=float, default=1e-4)
 args = get_args(parser)
 
@@ -46,22 +46,12 @@ def load_dataset(args, tokenizer):
     return (*datasets,) if len(datasets) > 1 else dataset
 
 train_dataset, valid_dataset, test_dataset = load_dataset(args, model.tokenizer)
+print(f'Validation data has {len(valid_dataset)} samples.')
 
-loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False,
+loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False,
                     num_workers=0, pin_memory=True, collate_fn=preprocess_batch)
 
 # initialize adaptive retrieval model
-class ARModel(nn.Module):
-    def __init__(self, query_dim=1024, hidden_dim=512):
-        super().__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(query_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, 1)
-        )
-
-    def forward(self, inputs):
-        return torch.sigmoid(self.fc(inputs))
 
 ar_model = ARModel(query_dim=model.encoder.config.hidden_size * 2).to(device)
 
@@ -78,41 +68,43 @@ for epoch_ix in tqdm(range(args.epochs)):
         lengths = (mask.sum(dim=1) - 1).detach().cpu().numpy()
         logits, _, _, _, _, knn_query = model(data)
         label = data['target']['input_ids'][:, 1:].to(device)
-        tae_probs = F.softmax(logits, dim=-1) # [bs, seq_len, num_tokens]
+        tae_lprobs = F.log_softmax(logits, dim=-1) # [bs, seq_len, num_tokens]
 
         # sample a token in every sample
         # we are doing this so knn lookup doesn't blow up gpu memory
         sampled_indices = np.random.randint(lengths)
-        tae_probs = tae_probs[np.arange(len(label)), sampled_indices]
+        tae_lprobs = tae_lprobs[np.arange(len(label)), sampled_indices]
         label = label[np.arange(len(label)), sampled_indices]
         knn_query = knn_query[np.arange(len(label)), sampled_indices]
 
         # convert labels to one hot
         label = label.flatten()
-        label_onehot = torch.zeros(len(label), tae_probs.shape[-1]).to(device)
+        label_onehot = torch.zeros(len(label), tae_lprobs.shape[-1]).to(device)
         label_onehot = label_onehot.scatter_(1, label[:, None], 1)
-        label_onehot = label_onehot.reshape(tae_probs.shape)
+        label_onehot = label_onehot.reshape(tae_lprobs.shape)
 
         # get knn probs
-        knn_logprobs = model.get_knn_scores_per_step(knn_query[:, None])
-        knn_probs = torch.exp(knn_logprobs)
+        knn_lprobs = model.get_knn_scores_per_step(knn_query[:, None])
 
-        lam = ar_model(knn_query)
-        combined_probs = lam * knn_probs + (1 - lam) * tae_probs
+        lam = ar_model(knn_query / torch.linalg.norm(knn_query, dim=1, keepdim=True))
+        lprobs = torch.stack([knn_lprobs, tae_lprobs], dim=1)
+        combined_probs = torch.exp(lprobs + lam[..., None]).sum(dim=1)
+        if np.isnan(torch.mean(lam).detach().cpu().numpy()):
+            import pdb; pdb.set_trace()
 
         loss = torch.log((combined_probs * label_onehot).sum(-1)).mean()
-        loss += args.reg_coeff * torch.mean(lam)
+        loss += args.reg_coeff * torch.mean(lam ** 2)
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
     # log per-token accuracy
-    acc_tae_only = compute_acc(tae_probs, label)
-    acc_knn_only = compute_acc(knn_probs, label)
+    acc_tae_only = compute_acc(tae_lprobs, label)
+    acc_knn_only = compute_acc(knn_lprobs, label)
     acc_combined = compute_acc(combined_probs, label)
     print(f'[Ep {epoch_ix}] - acc_tae {acc_tae_only}; acc_knn {acc_knn_only}; acc_combined {acc_combined}')
-    print(f'         avg_lambda {(torch.mean(lam)).detach().cpu().numpy().round(3)}')
+    print(f'         avg_lambda {(torch.mean(torch.exp(lam[:, 0]))).detach().cpu().numpy().round(3)}')
 
     # save model
     save_path = os.path.join(args.save_dir, 'ar.pth')

@@ -90,6 +90,7 @@ def make_parser():
     parser.add_argument('--lr_decay', type=float, default=1)
     parser.add_argument('--n', type=int, default=256)
     parser.add_argument('--warmup_steps', type=int, default=0)
+    parser.add_argument('--pretrained_ar_path', type=str, default=None)
 
     # Added in case we want to run everything with 16-bit precision to speed things up
     parser.add_argument('--fp16', default=False, action='store_true', help='use FP16')
@@ -283,7 +284,7 @@ def compute_loss(args, data, model, target_input=None, no_context_update=False, 
             for idx, value in zip(lp_topk.indices, lp_topk.values):
                 print(model.tokenizer.decode(int(idx)).replace(' ', ''), '==>', float(value.detach().cpu()))
             
-        logits = model.interpolate(lprobs, knn_scores)
+        logits = model.interpolate(lprobs, knn_scores, knn_context=last_ffn)
 
         if print_nn:
             print('interpolated distribution')

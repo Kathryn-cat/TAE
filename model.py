@@ -6,6 +6,7 @@
 
 import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel, BertModel
 from torch.nn import LayerNorm
 # from knnlm import KNN_Dstore
@@ -35,6 +36,10 @@ class Model(nn.Module):
         self.linear_before_softmax = nn.Sequential(nn.Linear(config.hidden_size, config.hidden_size),
                                                    nn.Tanh() if not args.use_gelu else nn.GELU(),
                                                    nn.Linear(config.hidden_size, config.hidden_size))
+        if args.pretrained_ar_path is not None:
+            self.ar_model = ARModel(self.encoder.config.hidden_size * 2)
+        else:
+            self.ar_model = None
 
     def encode(self, source, no_context_update):
         encoder_output = self.encoder(
@@ -135,15 +140,19 @@ class KNNModel(Model):
             x, vocab_size, pad_id, save_knns=save_knns
         )
 
-    def interpolate(self, lprobs, knn_scores):
+    def interpolate(self, lprobs, knn_scores, last_ffn=None):
         # import pdb; pdb.set_trace()
         # taken from knnmt/fairseq/sequence_generator.py
         # lprobs = torch.stack([lprobs.squeeze(dim=1),
         #                       knn_scores.to(lprobs)], dim=0)
         last_lprobs = torch.stack([lprobs[:, -1], knn_scores.to(lprobs)], dim=0)
         coeffs = torch.ones_like(last_lprobs)
-        coeffs[0] = np.log(1 - self.dstore.lmbda)
-        coeffs[1] = np.log(self.dstore.lmbda)
+        lam = self.dstore.lmbda
+        if self.ar_model is not None:
+            lam = self.ar_model(last_ffn.view(-1, self.encoder.config.hid_size * 2))
+            lam = lam.reshape(lprobs.shape)
+        coeffs[0] = np.log(1 - lam)
+        coeffs[1] = np.log(lam)
         last_lprobs = torch.logsumexp(last_lprobs + coeffs, dim=0)
         lprobs[:, -1] = last_lprobs
         # import pdb; pdb.set_trace()
@@ -175,3 +184,26 @@ class MyEmbedding(nn.Module):
         embeddings = self.pembedding.LayerNorm(embeddings)
         embeddings = self.pembedding.dropout(embeddings)
         return embeddings
+
+
+class ARModel(nn.Module):
+    def __init__(self, query_dim=1024, hidden_dim=128):
+        super().__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(query_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(hidden_dim, 2)
+        )
+
+    def forward(self, inputs):
+        return F.log_softmax(self.fc(inputs), dim=1)

@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from knnlm import KNN_Dstore
-# import wandb
+import wandb
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import argparse
@@ -141,6 +141,8 @@ def train(args):
             model.load_state_dict(checkpoint['model_to_evaluate'])
             ema_model = EMA(model, args.ema_param)
             model.load_state_dict(checkpoint['model_to_train'])
+            ar_ckpt = torch.load(args.pretrained_ar_path)
+            model.load_state_dict(ar_ckpt)
             if not args.no_encoder:
                 encoder_optimizer.load_state_dict(checkpoint['enc_optimizer_state'])
             decoder_optimizer.load_state_dict(checkpoint['dec_optimizer_state'])
@@ -285,8 +287,8 @@ if __name__ == '__main__':
 
     args = get_args(parser)
 
-    # wandb.init(name="knn-code-gen",
-    #            config=vars(args))
+    wandb.init(entity='jingyuny', project='tae', name=f'{args.dataset_name}_{args.prefix}', # name="knn-code-gen",
+               config=vars(args))
 
     # print(args)
     train(args)
