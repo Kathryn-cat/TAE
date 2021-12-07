@@ -25,6 +25,7 @@ from utils import generate_model_name, make_parser, get_args
 from torch.nn.utils.rnn import pad_sequence
 from dataset_preprocessing.django import Django
 from dataset_preprocessing.conala import Conala
+from dataset_preprocessing.csn import CSNAugmentedConala
 from dataset_preprocessing.small_sql import SmallSQL
 from dataset_preprocessing.wikisql.wikisql import Wikisql
 
@@ -33,7 +34,8 @@ dataset_classes = {'django': Django,
                    'conala': Conala,
                    'atis': SmallSQL,
                    'geography': SmallSQL,
-                   'wikisql': Wikisql}
+                   'wikisql': Wikisql,
+                   'augcsn': CSNAugmentedConala}
 
 
 def load_dataset(args, tokenizer):
