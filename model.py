@@ -157,8 +157,8 @@ class KNNModel(Model):
         # coeffs = torch.ones_like(last_lprobs)
         # coeffs[0] = torch.log(1 - self.dstore.lmbda)
         # coeffs[1] = torch.log(self.dstore.lmbda)
-        model_coeff = torch.zeros(knn_scores.shape).to(last_lprobs) + torch.log(1 - self.dstore.lmbda)
-        knn_coeff = torch.zeros(knn_scores.shape).to(last_lprobs) + torch.log(self.dstore.lmbda)
+        model_coeff = torch.zeros(knn_scores.shape).to(last_lprobs) + np.log(1 - self.dstore.lmbda)
+        knn_coeff = torch.zeros(knn_scores.shape).to(last_lprobs) + np.log(self.dstore.lmbda)
         coeffs = torch.stack([model_coeff, knn_coeff], dim=0)
         last_lprobs = torch.logsumexp(last_lprobs + coeffs, dim=0)
         if inplace:

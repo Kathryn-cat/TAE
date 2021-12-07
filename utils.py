@@ -267,10 +267,11 @@ def compute_loss(args, data, model, target_input=None, no_context_update=False, 
         query = last_ffn[:, -1:]
         knn_scores = model.get_knn_scores_per_step(query, save_knns=print_nn)
         if print_nn:
-            import pdb; pdb.set_trace()
             knn_scores, (knns, probs, indices) = knn_scores
             intent = model.tokenizer.decode(data['source']['input_ids'][0])
+            gt = model.tokenizer.decode(data['target']['input_ids'][0])
             print('Intent:', intent[:intent.find('[PAD]')])
+            print('GT:', gt[:gt.find('[PAD]')])
             print('Generated:', model.tokenizer.decode(target_input['input_ids'][0, :-1]))
             print('Nearest neighbors:')
             for i, n, p in zip(range(10), knns[0][:10], probs[0][:10]):

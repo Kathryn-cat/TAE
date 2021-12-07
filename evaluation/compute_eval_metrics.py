@@ -53,7 +53,7 @@ def compute_metric(translation_corpus, dataset_name, split, tokenizer=None, sect
         if return_data and len(log_data) < 100:
             log_data.append([
                 reference,
-                translation['str']
+                translation['str'] if isinstance(translation, dict) else translation[0]['str']
             ])
         if args.dataset_name == 'wikisql':
             annotated_data = json.loads(annotated_dataset_object[index])

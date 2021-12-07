@@ -26,7 +26,7 @@ def evaluate(args, valid_loader, model, split='dev'):
 def generate_hypothesis(args, valid_loader, model, search):
     whole_hype = []
     for i, data in enumerate(tqdm(valid_loader)):
-        data['target']['input_ids'] *= 0
+        # data['target']['input_ids'] *= 0
         if args.pointer_network:
             data['label'] *= 0
 

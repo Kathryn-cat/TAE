@@ -261,12 +261,18 @@ def train(args):
                 generated_set = generate_hypothesis(args, loader[split], model, search=search)
                 with open(file, 'wb') as f:
                     pickle.dump(generated_set, f)
-                metrics = compute_metric(generated_set, args.dataset_name, split=split, tokenizer=model.tokenizer, args=args)
+                metrics, sampled_texts = compute_metric(generated_set, args.dataset_name, split=split, tokenizer=model.tokenizer, args=args, return_data=True)
+                test_intents = [model.tokenizer.decode(item['intent']['input_ids']) for item in test_dataset[:100]]
+                sampled_texts = [[y] + x for x, y in zip(sampled_texts, test_intents)]
                 print('{} {} accuracy'.format(split, search), metrics['exact_match'])
                 if search == 'beam':
                     print('{} {} oracle accuracy'.format(split, search), metrics['exact_oracle_match'])
                 print('{} {} bleu score'.format(split, search), metrics['bleu'])
                 print("{} {} exececution accuracy".format(split, search), metrics['exec_acc'])
+
+                wandb.log({
+                    'final_predictions': wandb.Table(data=sampled_texts, columns=['Intent', 'GT', 'Pred'])
+                }, step=10000)
 
                 with open('results.txt', 'a') as f:
                     contents = f"{args.lmbda},{args.k},{args.probe},{metrics['exact_match']},{metrics['exact_oracle_match']},{metrics['bleu']}\n"
@@ -287,7 +293,7 @@ if __name__ == '__main__':
 
     args = get_args(parser)
 
-    wandb.init(entity='jingyuny', project='tae', name=f'{args.dataset_name}_{args.prefix}', # name="knn-code-gen",
+    wandb.init(name="knn-code-gen",   # entity='jingyuny', project='tae', name=f'{args.dataset_name}_{args.prefix}', 
                config=vars(args))
 
     # print(args)
